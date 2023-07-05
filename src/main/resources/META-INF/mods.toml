@@ -1,0 +1,32 @@
+modLoader="javafml" #mandatory
+loaderVersion="${loader_version_range}" #mandatory
+license="${mod_license}"
+#issueTrackerURL="https://change.me.to.your.issue.tracker.example.invalid/" #optional
+
+[[mods]] #mandatory
+modId="environmental_expansion" #mandatory
+version="1.0" #mandatory
+displayName="Environmental Expansion" #mandatory
+#updateJSONURL="https://change.me.example.invalid/updates.json" #optional
+#displayURL="https://change.me.to.your.mods.homepage.example.invalid/" #optional
+#logoFile="examplemod.png" #optional
+authors="Fotatata, SpaceWalrus, CheezieFace, Makaroni, LordRextar, Pea_sh0ter" #optional
+displayTest="MATCH_VERSION"
+
+description='''
+
+'''
+
+[[dependencies.environmental_expansion]]
+    modId="forge" #mandatory
+    mandatory=true #mandatory
+    versionRange="${forge_version_range}" #mandatory
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.environmental_expansion]]
+    modId="minecraft"
+    mandatory=true
+    versionRange="1.20"
+    ordering="NONE"
+    side="BOTH"
