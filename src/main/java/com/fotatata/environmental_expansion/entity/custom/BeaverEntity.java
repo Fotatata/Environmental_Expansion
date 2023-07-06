@@ -1,27 +1,24 @@
 package com.fotatata.environmental_expansion.entity.custom;
 
 import com.fotatata.environmental_expansion.entity.ModEntityTypes;
-import com.mojang.datafixers.types.templates.Tag;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.particles.BlockParticleOption;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.AgeableMob;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.*;
 import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.SaplingBlock;
-import net.minecraftforge.common.Tags;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import software.bernie.geckolib.animatable.GeoEntity;
@@ -51,37 +48,40 @@ public class BeaverEntity extends Animal implements GeoEntity {
         this.goalSelector.addGoal(6,new LookAtPlayerGoal(this, Player.class,6.0f));
     }
 
-    public class BeaverDestroySapling extends Goal {
-        public BeaverDestroySapling(PathfinderMob mob, TagKey<Block> blocksToDestroy, double speedModifier) {
-            this.mob = mob;
-            this.blocksToDestroy = blocksToDestroy;
+    public static class BeaverDestroySapling extends Goal {
+        public BeaverDestroySapling(BeaverEntity beaver, TagKey<Block> blockToDestroy, double speedModifier) {
+            this.beaver = beaver;
+            this.blockToDestroy = blockToDestroy;
             this.speedModifier = speedModifier;
         }
 
-        protected final PathfinderMob mob;
-        protected final TagKey<Block> blocksToDestroy;
+        protected final BeaverEntity beaver;
+        protected final TagKey<Block> blockToDestroy;
         protected final double speedModifier;
         protected BlockPos targetPos;
         protected int idleTickCounter;
         protected int cooldownCounter;
+        protected int ticksSinceReachedGoal;
 
 
         @Override
         public boolean canUse() {
-            if(cooldownCounter > 0) {
+            if (!net.minecraftforge.event.ForgeEventFactory.getMobGriefingEvent(this.beaver.level(), this.beaver)) {
+                return false;
+            }else if (cooldownCounter > 0) {
                 cooldownCounter--;
                 return false;
             }
-            targetPos = generateTarget(mob.level(),mob.blockPosition(),24, 3);
+            targetPos = generateTarget(beaver.level(), beaver.blockPosition());
             return targetPos != null;
         }
 
-        protected BlockPos generateTarget(Level level,BlockPos pos, int range, int verticalRange){
-            for(int x = -range; x <= range;x++){
-                for(int z = -range; z <= range;z++){
-                    for(int y = -range; y <= verticalRange;y++){
-                        BlockPos current = pos.offset(x,y,z);
-                        if(isValidTarget(current, level))
+        protected BlockPos generateTarget(Level level, BlockPos pos) {
+            for (int x = -24; x <= 24; x++) {
+                for (int z = -24; z <= 24; z++) {
+                    for (int y = -3; y <= 3; y++) {
+                        BlockPos current = pos.offset(x, y, z);
+                        if (isValidTarget(current, level))
                             return current;
                     }
                 }
@@ -89,38 +89,49 @@ public class BeaverEntity extends Animal implements GeoEntity {
             return null;
         }
 
-        protected boolean isValidTarget(BlockPos pos, Level level){
-            return level.getBlockState(pos).is(blocksToDestroy);
+        protected boolean isValidTarget(BlockPos pos, Level level) {
+            return level.getBlockState(pos).is(blockToDestroy);
         }
 
         @Override
         public boolean canContinueToUse() {
-            return cooldownCounter <= 0 && targetPos != null && isValidTarget(targetPos, mob.level()) && idleTickCounter >= 200;
+            return cooldownCounter <= 0 && targetPos != null && isValidTarget(targetPos, beaver.level()) && idleTickCounter >= 200;
         }
 
         @Override
         public void tick() {
-            if(!mob.getNavigation().isStuck()){
-                mob.getNavigation().moveTo(this.targetPos.getX(), this.targetPos.getY(), this.targetPos.getZ(), speedModifier);
-            }else this.idleTickCounter++;
-            if(mob.blockPosition().distToCenterSqr(this.targetPos.getX(),this.targetPos.getY(),this.targetPos.getZ()) <= 1){
+            if (!beaver.getNavigation().isStuck()) {
+                beaver.getNavigation().moveTo(this.targetPos.above().getCenter().x, this.targetPos.above().getCenter().y, this.targetPos.above().getCenter().z, speedModifier);
+                idleTickCounter++;
+            }
+            if (beaver.getOnPos().distToCenterSqr(this.targetPos.getCenter()) <= 1) {
+                ticksSinceReachedGoal++;
                 breakBlock();
             }
         }
 
-        public void breakBlock(){
-            this.mob.level().destroyBlock(targetPos, true);
-            this.cooldownCounter = 600;
+        public void breakBlock() {
+            if (ticksSinceReachedGoal > 0) {
+                this.beaver.isGnawing = true;
+                ((ServerLevel)beaver.level()).sendParticles(new BlockParticleOption(ParticleTypes.BLOCK, beaver.level().getBlockState(targetPos)), (double)targetPos.getX() + 0.5D, (double)targetPos.getY() + 0.7D, (double)targetPos.getZ() + 0.5D, 3, ((double)beaver.getRandom().nextFloat() - 0.5D) * 0.08D, ((double)beaver.getRandom().nextFloat() - 0.5D) * 0.08D, ((double)beaver.getRandom().nextFloat() - 0.5D) * 0.08D, 0.15D);
+            }
+            if (ticksSinceReachedGoal > 40){
+                this.beaver.level().destroyBlock(targetPos, false);
+                this.cooldownCounter = (int) (Math.random()*1200 + 600);
+                this.beaver.isGnawing = false;
+                ticksSinceReachedGoal = 0;
+            }
         }
 
         @Override
         public void stop() {
-            this.idleTickCounter= 0;
-            this.mob.getNavigation().stop();
+            this.idleTickCounter = 0;
+            this.beaver.getNavigation().stop();
         }
 
         @Override
-        public void start() {mob.getNavigation().moveTo(this.targetPos.getX(), this.targetPos.getY(), this.targetPos.getZ(), speedModifier);}
+        public void start() {
+        }
     }
 
     public BeaverEntity(EntityType<? extends Animal> entityType, Level level) {
@@ -141,13 +152,14 @@ public class BeaverEntity extends Animal implements GeoEntity {
 
     public boolean isFood(@NotNull ItemStack p_28271_) {return FOOD_ITEMS.test(p_28271_);}
 
-    public boolean isGnawing = false;
+    public boolean isGnawing;
 
     private static final RawAnimation GNAW_ANIM = RawAnimation.begin().thenPlay("misc.gnaw");
     protected <E extends BeaverEntity> PlayState gnawAnimController(final AnimationState<E> event) {
-        if (isGnawing)
+        if (event.getAnimatable().isGnawing) {
+            System.out.println("Beaver is gnawing");
             return event.setAndContinue(GNAW_ANIM);
-
+        }
         return PlayState.STOP;
     }
 
@@ -156,7 +168,7 @@ public class BeaverEntity extends Animal implements GeoEntity {
         controllers.add(
                 DefaultAnimations.genericWalkIdleController(this),
                 DefaultAnimations.genericAttackAnimation(this, DefaultAnimations.ATTACK_STRIKE),
-                new AnimationController<>(this,"Gnawing",5,this::gnawAnimController)
+                new AnimationController<>(this,"Gnawing",0,this::gnawAnimController)
         );
 
     }
