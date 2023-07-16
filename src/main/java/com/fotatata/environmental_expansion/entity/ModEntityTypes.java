@@ -2,6 +2,7 @@ package com.fotatata.environmental_expansion.entity;
 
 import com.fotatata.environmental_expansion.EnvironmentalExpansion;
 import com.fotatata.environmental_expansion.entity.custom.BeaverEntity;
+import com.fotatata.environmental_expansion.entity.custom.CraneEntity;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
@@ -17,6 +18,9 @@ public class ModEntityTypes {
     public static final RegistryObject<EntityType<BeaverEntity>> BEAVER = ENTITY_TYPES.register("beaver",
             ()->EntityType.Builder.of(BeaverEntity::new, MobCategory.CREATURE).sized(0.6f,0.5f)
                     .build(new ResourceLocation(EnvironmentalExpansion.MOD_ID, "beaver").toString()));
+    public static final RegistryObject<EntityType<CraneEntity>> CRANE = ENTITY_TYPES.register("crane",
+            ()->EntityType.Builder.of(CraneEntity::new, MobCategory.CREATURE).sized(0.5f,1.6f)
+                    .build(new ResourceLocation(EnvironmentalExpansion.MOD_ID, "crane").toString()));
 
     public static void register(IEventBus bus) {
         ENTITY_TYPES.register(bus);

@@ -39,7 +39,6 @@ import software.bernie.geckolib.core.object.PlayState;
 import software.bernie.geckolib.util.GeckoLibUtil;
 
 public class BeaverEntity extends Animal implements GeoEntity {
-    private static final Ingredient FOOD_ITEMS = Ingredient.of(ItemTags.SAPLINGS);
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
 
     @Override
@@ -47,7 +46,7 @@ public class BeaverEntity extends Animal implements GeoEntity {
         this.goalSelector.addGoal(1,new FloatGoal(this));
         this.goalSelector.addGoal(1,new PanicGoal(this,0.8d));
         this.goalSelector.addGoal(2, new BreedGoal(this,0.5d));
-        this.goalSelector.addGoal(2, new TemptGoal(this,0.6d, FOOD_ITEMS,false));
+        this.goalSelector.addGoal(2, new TemptGoal(this,0.6d, Ingredient.of(ItemTags.SAPLINGS),false));
         this.goalSelector.addGoal(3,new FollowParentGoal(this, 0.6d));
         this.goalSelector.addGoal(4, new BeaverDestroySapling(this, BlockTags.SAPLINGS,0.5d));
         this.goalSelector.addGoal(4, new RandomStrollGoal(this,0.4d));
@@ -61,17 +60,17 @@ public class BeaverEntity extends Animal implements GeoEntity {
 
     public static AttributeSupplier setAttributes(){
         return Animal.createMobAttributes()
-                .add(Attributes.MAX_HEALTH,20d)
+                .add(Attributes.MAX_HEALTH,6d)
                 .add(Attributes.MOVEMENT_SPEED, 0.4d).build();
     }
 
     @Nullable
     @Override
-    public AgeableMob getBreedOffspring(@NotNull ServerLevel serverLevel,@Nullable AgeableMob ageableMob) {
-        return ModEntityTypes.BEAVER.get().create(serverLevel);
+    public AgeableMob getBreedOffspring(@NotNull ServerLevel level,@Nullable AgeableMob ageableMob) {
+        return ModEntityTypes.BEAVER.get().create(level);
     }
 
-    public boolean isFood(@NotNull ItemStack p_28271_) {return FOOD_ITEMS.test(p_28271_);}
+    public boolean isFood(@NotNull ItemStack p_28271_) {return Ingredient.of(ItemTags.SAPLINGS).test(p_28271_);}
 
     public static final EntityDataAccessor<Boolean> isGnawing = SynchedEntityData.defineId(BeaverEntity.class, EntityDataSerializers.BOOLEAN);
 
@@ -120,29 +119,31 @@ public class BeaverEntity extends Animal implements GeoEntity {
         protected final double speedModifier;
         protected BlockPos targetPos;
         protected int idleTickCounter;
-        protected int cooldownCounter;
+        protected int coolDownCounter;
         protected int ticksSinceReachedGoal;
 
 
         @Override
         public boolean canUse() {
-            if (!this.beaver.isBaby() && !net.minecraftforge.event.ForgeEventFactory.getMobGriefingEvent(this.beaver.level(), this.beaver))
+            if (this.beaver.isBaby() || !net.minecraftforge.event.ForgeEventFactory.getMobGriefingEvent(this.beaver.level(), this.beaver))
                 return false;
-            else if (cooldownCounter > 0) {
-                cooldownCounter--;
+            else if (coolDownCounter > 0) {
+                coolDownCounter--;
                 return false;
             }
-            targetPos = generateTarget(beaver.level(), beaver.blockPosition());
+            targetPos = getTargetPosition(beaver.level(), beaver.blockPosition());
             return targetPos != null;
         }
 
-        protected BlockPos generateTarget(Level level, BlockPos pos) {
-            for (int x = -24; x <= 24; x++) {
-                for (int z = -24; z <= 24; z++) {
-                    for (int y = -3; y <= 3; y++) {
-                        BlockPos current = pos.offset(x, y, z);
-                        if (isValidTarget(current, level))
-                            return current;
+        protected BlockPos getTargetPosition(Level level, BlockPos pos) {
+            for (int x = 0; x <= 48; x++) {
+                for (int z = 0; z <= 48; z++) {
+                    for (int y = 0; y <= 6; y++) {
+                        BlockPos current = pos.offset(
+                                x % 2 == 0 ? x / 2 : (-x - 1) / 2,
+                                y % 2 == 0 ? y / 2 : (-y - 1) / 2,
+                                z % 2 == 0 ? z / 2 : (-z - 1) / 2);
+                        if (isValidTarget(current, level)) return current;
                     }
                 }
             }
@@ -156,21 +157,21 @@ public class BeaverEntity extends Animal implements GeoEntity {
         protected java.util.List<ItemStack> getLoot(String StringBlock) {
             java.util.List<ItemStack> items = new java.util.ArrayList<>();
             Block block;
-            StringBlock = StringBlock.substring(6, StringBlock.length() - 8).concat("log");
-            block = ForgeRegistries.BLOCKS.getValue(new ResourceLocation(StringBlock));
-            for(double i = Math.random()*4; i < 4; ++i) {
-                items.add(new ItemStack(Items.STICK));
+            if (StringBlock.lastIndexOf('_') > 6){
+                StringBlock = StringBlock.substring(6, StringBlock.lastIndexOf('_')).concat("_log");
+                block = ForgeRegistries.BLOCKS.getValue(new ResourceLocation(StringBlock));
+                for(double i = Math.random()*4; i < 4; ++i) {
+                    assert block != null;
+                    items.add(new ItemStack(block.asItem()));
+                }
             }
-            for(double i = Math.random()*4; i < 4; ++i) {
-                assert block != null;
-                items.add(new ItemStack(block.asItem()));
-            }
+            for(double i = Math.random()*4; i < 4; ++i) items.add(new ItemStack(Items.STICK));
             return items;
         }
 
         @Override
         public boolean canContinueToUse() {
-            return cooldownCounter <= 0 && targetPos != null && isValidTarget(targetPos, beaver.level()) && idleTickCounter >= 200;
+            return coolDownCounter <= 0 && targetPos != null && isValidTarget(targetPos, beaver.level()) && idleTickCounter >= 200 && !beaver.isBaby();
         }
 
         @Override
@@ -182,7 +183,7 @@ public class BeaverEntity extends Animal implements GeoEntity {
             if (beaver.getOnPos().distToCenterSqr(this.targetPos.getCenter()) <= 1) {
                 ticksSinceReachedGoal++;
                 breakBlock();
-            }
+            }else ticksSinceReachedGoal = 0;
         }
 
         public void breakBlock() {
@@ -192,9 +193,9 @@ public class BeaverEntity extends Animal implements GeoEntity {
             }
             if (ticksSinceReachedGoal > 40){
                 getLoot(beaver.level().getBlockState(targetPos).getBlock().toString()).forEach(s -> beaver.level().addFreshEntity(new ItemEntity(beaver.level(), beaver.getX(), beaver.getY(1.0D), beaver.getZ(), s)));
-                this.beaver.level().destroyBlock(targetPos, false);
+                beaver.level().destroyBlock(targetPos, false);
 
-                this.cooldownCounter = (int) (Math.random()*1200 + 600);
+                coolDownCounter = (int) (Math.random()*1200 + 600);
                 beaver.setGnawAnim(false);
                 ticksSinceReachedGoal = 0;
             }
@@ -202,12 +203,10 @@ public class BeaverEntity extends Animal implements GeoEntity {
 
         @Override
         public void stop() {
-            this.idleTickCounter = 0;
-            this.beaver.getNavigation().stop();
-        }
+            idleTickCounter = 0;
+            beaver.getNavigation().stop();
+            beaver.setGnawAnim(false);
 
-        @Override
-        public void start() {
         }
     }
 }

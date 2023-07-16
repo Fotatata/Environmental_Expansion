@@ -2,6 +2,7 @@ package com.fotatata.environmental_expansion;
 
 import com.fotatata.environmental_expansion.entity.ModEntityTypes;
 import com.fotatata.environmental_expansion.entity.client.BeaverRenderer;
+import com.fotatata.environmental_expansion.entity.client.CraneRenderer;
 import com.mojang.logging.LogUtils;
 import net.minecraft.client.renderer.entity.EntityRenderers;
 import net.minecraftforge.api.distmarker.Dist;
@@ -46,6 +47,7 @@ public class EnvironmentalExpansion {
         @SubscribeEvent
         public static void onClientSetup(FMLClientSetupEvent event) {
             EntityRenderers.register(ModEntityTypes.BEAVER.get(), BeaverRenderer::new);
+            EntityRenderers.register(ModEntityTypes.CRANE.get(), CraneRenderer::new);
         }
     }
 }
